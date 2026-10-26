@@ -1,0 +1,2177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<job>
+  
+  
+  <name>job_etl_principal</name>
+  
+  
+  <description>Orquestra seis transformacoes ETL, valida origem/dimensoes/staging/fato, interrompe em caso de erro.</description>
+  
+  
+  <extended_description>Projeto TABD - One Piece e V-Dem. Execucao sequencial e idempotente. Sem reset automatico.</extended_description>
+  
+  
+  <job_version>1</job_version>
+  
+  
+  <job_status>0</job_status>
+  
+  
+  <directory>/</directory>
+  
+  
+  <created_user>Projeto TABD</created_user>
+  
+  
+  <modified_user>Projeto TABD</modified_user>
+  
+  
+  <pass_batchid>N</pass_batchid>
+  
+  
+  <shared_objects_file/>
+  
+  
+  <parameters/>
+  
+  
+  <connection>
+    
+    
+    
+    
+    <name>POSTGRES_TABD</name>
+    
+    
+    
+    
+    <server>${POSTGRES_HOST}</server>
+    
+    
+    
+    
+    <type>POSTGRESQL</type>
+    
+    
+    
+    
+    <access>Native</access>
+    
+    
+    
+    
+    <database>${POSTGRES_DB}</database>
+    
+    
+    
+    
+    <port>${POSTGRES_PORT}</port>
+    
+    
+    
+    
+    <username>${POSTGRES_USER}</username>
+    
+    
+    
+    
+    <password>${POSTGRES_PASSWORD}</password>
+    
+    
+    
+    
+    <servername/>
+    
+    
+    
+    
+    <data_tablespace/>
+    
+    
+    
+    
+    <index_tablespace/>
+    
+    
+    
+    
+    <attributes/>
+    
+    
+  
+  
+  </connection>
+  
+  
+  
+  
+  <entries>
+    
+    
+    <entry>
+      
+      
+      <name>START</name>
+      
+      
+      <description>Inicia o ETL sem alterar as tabelas</description>
+      
+      
+      <type>SPECIAL</type>
+      
+      
+      <start>Y</start>
+      
+      
+      <dummy>N</dummy>
+      
+      
+      <repeat>N</repeat>
+      
+      
+      <schedulerType>0</schedulerType>
+      
+      
+      <intervalSeconds>0</intervalSeconds>
+      
+      
+      <intervalMinutes>0</intervalMinutes>
+      
+      
+      <hour>12</hour>
+      
+      
+      <minutes>0</minutes>
+      
+      
+      <weekDay>1</weekDay>
+      
+      
+      <DayOfMonth>1</DayOfMonth>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>60</xloc>
+      
+      
+      <yloc>170</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      <name>00 Carregar .env</name>
+      <description>Le POSTGRES_HOST/PORT/DB/USER/PASSWORD do arquivo .env na raiz do projeto</description>
+      <type>SET_VARIABLES</type>
+      <replacevars>Y</replacevars>
+      <filename>${Internal.Job.Filename.Directory}/../../.env</filename>
+      <file_variable_type>JVM</file_variable_type>
+      <fields>
+      </fields>
+      <parallel>N</parallel>
+      <draw>Y</draw>
+      <nr>0</nr>
+      <xloc>60</xloc>
+      <yloc>300</yloc>
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>01 Validar OLTP</name>
+      
+      
+      <description/>
+      
+      
+      <type>SQL</type>
+      
+      
+      <sql>DO $tabd$
+DECLARE
+    n_saga int; n_arco int; n_cap int;
+BEGIN
+    SELECT COUNT(*) INTO n_saga FROM oltp.saga;
+    SELECT COUNT(*) INTO n_arco FROM oltp.arco;
+    SELECT COALESCE(SUM(qtd_capitulos),0) INTO n_cap FROM oltp.arco;
+    IF n_saga &lt;&gt; 11 OR n_arco &lt;&gt; 32 OR n_cap &lt;&gt; 1125 THEN
+       RAISE EXCEPTION 'OLTP incompleto: % sagas, % arcos, % capitulos (esperado 11/32/1125)', n_saga,n_arco,n_cap;
+    END IF;
+    IF EXISTS (SELECT 1 FROM oltp.arco WHERE ano_inicio&gt;ano_fim OR isa_final&lt;&gt;op_final+des_final+dis_final+res_final) THEN
+       RAISE EXCEPTION 'Inconsistencia de periodo ou ISA na fonte One Piece';
+    END IF;
+    RAISE NOTICE 'OK PRE: OLTP com 11 sagas, 32 arcos e 1125 capitulos.';
+END
+$tabd$;</sql>
+      
+      
+      <useVariableSubstitution>F</useVariableSubstitution>
+      
+      
+      <sqlfromfile>F</sqlfromfile>
+      
+      
+      <sqlfilename/>
+      
+      
+      <sendOneStatement>T</sendOneStatement>
+      
+      
+      <connection>POSTGRES_TABD</connection>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>250</xloc>
+      
+      
+      <yloc>155</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>02 DIM_TEMPO</name>
+      
+      
+      <description/>
+      
+      
+      <type>TRANS</type>
+      
+      
+      <specification_method>filename</specification_method>
+      
+      
+      <trans_object_id/>
+      
+      
+      <filename>${Internal.Job.Filename.Directory}/../transformations/tr_dim_tempo.ktr</filename>
+      
+      
+      <transname/>
+      
+      
+      <directory>/</directory>
+      
+      
+      <arg_from_previous>N</arg_from_previous>
+      
+      
+      <params_from_previous>N</params_from_previous>
+      
+      
+      <exec_per_row>N</exec_per_row>
+      
+      
+      <clear_rows>N</clear_rows>
+      
+      
+      <clear_files>N</clear_files>
+      
+      
+      <set_logfile>N</set_logfile>
+      
+      
+      <logfile/>
+      
+      
+      <logext/>
+      
+      
+      <add_date>N</add_date>
+      
+      
+      <add_time>N</add_time>
+      
+      
+      <loglevel>Basic</loglevel>
+      
+      
+      <cluster>N</cluster>
+      
+      
+      <slave_server_name/>
+      
+      
+      <set_append_logfile>N</set_append_logfile>
+      
+      
+      <wait_until_finished>Y</wait_until_finished>
+      
+      
+      <follow_abort_remote>N</follow_abort_remote>
+      
+      
+      <create_parent_folder>N</create_parent_folder>
+      
+      
+      <logging_remote_work>N</logging_remote_work>
+      
+      
+      <parameters>
+        
+        
+        <pass_all_parameters>Y</pass_all_parameters>
+        
+      
+      </parameters>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>480</xloc>
+      
+      
+      <yloc>155</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>03 DIM_SAGA</name>
+      
+      
+      <description/>
+      
+      
+      <type>TRANS</type>
+      
+      
+      <specification_method>filename</specification_method>
+      
+      
+      <trans_object_id/>
+      
+      
+      <filename>${Internal.Job.Filename.Directory}/../transformations/tr_dim_saga.ktr</filename>
+      
+      
+      <transname/>
+      
+      
+      <directory>/</directory>
+      
+      
+      <arg_from_previous>N</arg_from_previous>
+      
+      
+      <params_from_previous>N</params_from_previous>
+      
+      
+      <exec_per_row>N</exec_per_row>
+      
+      
+      <clear_rows>N</clear_rows>
+      
+      
+      <clear_files>N</clear_files>
+      
+      
+      <set_logfile>N</set_logfile>
+      
+      
+      <logfile/>
+      
+      
+      <logext/>
+      
+      
+      <add_date>N</add_date>
+      
+      
+      <add_time>N</add_time>
+      
+      
+      <loglevel>Basic</loglevel>
+      
+      
+      <cluster>N</cluster>
+      
+      
+      <slave_server_name/>
+      
+      
+      <set_append_logfile>N</set_append_logfile>
+      
+      
+      <wait_until_finished>Y</wait_until_finished>
+      
+      
+      <follow_abort_remote>N</follow_abort_remote>
+      
+      
+      <create_parent_folder>N</create_parent_folder>
+      
+      
+      <logging_remote_work>N</logging_remote_work>
+      
+      
+      <parameters>
+        
+        
+        <pass_all_parameters>Y</pass_all_parameters>
+        
+      
+      </parameters>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>710</xloc>
+      
+      
+      <yloc>155</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>04 DIM_ARCO</name>
+      
+      
+      <description/>
+      
+      
+      <type>TRANS</type>
+      
+      
+      <specification_method>filename</specification_method>
+      
+      
+      <trans_object_id/>
+      
+      
+      <filename>${Internal.Job.Filename.Directory}/../transformations/tr_dim_arco.ktr</filename>
+      
+      
+      <transname/>
+      
+      
+      <directory>/</directory>
+      
+      
+      <arg_from_previous>N</arg_from_previous>
+      
+      
+      <params_from_previous>N</params_from_previous>
+      
+      
+      <exec_per_row>N</exec_per_row>
+      
+      
+      <clear_rows>N</clear_rows>
+      
+      
+      <clear_files>N</clear_files>
+      
+      
+      <set_logfile>N</set_logfile>
+      
+      
+      <logfile/>
+      
+      
+      <logext/>
+      
+      
+      <add_date>N</add_date>
+      
+      
+      <add_time>N</add_time>
+      
+      
+      <loglevel>Basic</loglevel>
+      
+      
+      <cluster>N</cluster>
+      
+      
+      <slave_server_name/>
+      
+      
+      <set_append_logfile>N</set_append_logfile>
+      
+      
+      <wait_until_finished>Y</wait_until_finished>
+      
+      
+      <follow_abort_remote>N</follow_abort_remote>
+      
+      
+      <create_parent_folder>N</create_parent_folder>
+      
+      
+      <logging_remote_work>N</logging_remote_work>
+      
+      
+      <parameters>
+        
+        
+        <pass_all_parameters>Y</pass_all_parameters>
+        
+      
+      </parameters>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>940</xloc>
+      
+      
+      <yloc>155</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>05 Validar dimensoes</name>
+      
+      
+      <description/>
+      
+      
+      <type>SQL</type>
+      
+      
+      <sql>DO $tabd$
+BEGIN
+ IF (SELECT COUNT(*) FROM dw.dim_tempo) &lt;&gt; 28 OR
+    (SELECT COUNT(*) FROM dw.dim_saga) &lt;&gt; 11 OR
+    (SELECT COUNT(*) FROM dw.dim_arco) &lt;&gt; 32 THEN
+   RAISE EXCEPTION 'Quantidade incorreta em DIM_TEMPO, DIM_SAGA ou DIM_ARCO';
+ END IF;
+ IF EXISTS (SELECT y.ano FROM generate_series(1997,2024) y(ano)
+            LEFT JOIN dw.dim_tempo d ON d.ano=y.ano
+            WHERE d.sk_tempo IS NULL OR d.decada&lt;&gt;(y.ano/10)*10) THEN
+   RAISE EXCEPTION 'DIM_TEMPO inconsistente';
+ END IF;
+ IF EXISTS (SELECT 1 FROM oltp.saga s LEFT JOIN dw.dim_saga d
+            ON d.id_saga_origem=s.id_saga
+            WHERE d.sk_saga IS NULL OR d.nome_saga IS DISTINCT FROM s.nome_saga)
+    OR EXISTS (SELECT 1 FROM oltp.arco a LEFT JOIN dw.dim_arco d
+            ON d.id_arco_origem=a.id_arco
+            WHERE d.sk_arco IS NULL OR d.nome_arco IS DISTINCT FROM a.nome_arco) THEN
+   RAISE EXCEPTION 'DIM_ARCO/DIM_SAGA divergem do OLTP';
+ END IF;
+ RAISE NOTICE 'OK DIMENSOES: 28 anos, 11 sagas, 32 arcos.';
+END
+$tabd$;</sql>
+      
+      
+      <useVariableSubstitution>F</useVariableSubstitution>
+      
+      
+      <sqlfromfile>F</sqlfromfile>
+      
+      
+      <sqlfilename/>
+      
+      
+      <sendOneStatement>T</sendOneStatement>
+      
+      
+      <connection>POSTGRES_TABD</connection>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>940</xloc>
+      
+      
+      <yloc>385</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>06 VDEM_ANUAL</name>
+      
+      
+      <description/>
+      
+      
+      <type>TRANS</type>
+      
+      
+      <specification_method>filename</specification_method>
+      
+      
+      <trans_object_id/>
+      
+      
+      <filename>${Internal.Job.Filename.Directory}/../transformations/tr_vdem_anual.ktr</filename>
+      
+      
+      <transname/>
+      
+      
+      <directory>/</directory>
+      
+      
+      <arg_from_previous>N</arg_from_previous>
+      
+      
+      <params_from_previous>N</params_from_previous>
+      
+      
+      <exec_per_row>N</exec_per_row>
+      
+      
+      <clear_rows>N</clear_rows>
+      
+      
+      <clear_files>N</clear_files>
+      
+      
+      <set_logfile>N</set_logfile>
+      
+      
+      <logfile/>
+      
+      
+      <logext/>
+      
+      
+      <add_date>N</add_date>
+      
+      
+      <add_time>N</add_time>
+      
+      
+      <loglevel>Basic</loglevel>
+      
+      
+      <cluster>N</cluster>
+      
+      
+      <slave_server_name/>
+      
+      
+      <set_append_logfile>N</set_append_logfile>
+      
+      
+      <wait_until_finished>Y</wait_until_finished>
+      
+      
+      <follow_abort_remote>N</follow_abort_remote>
+      
+      
+      <create_parent_folder>N</create_parent_folder>
+      
+      
+      <logging_remote_work>N</logging_remote_work>
+      
+      
+      <parameters>
+        
+        
+        <pass_all_parameters>Y</pass_all_parameters>
+        
+      
+      </parameters>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>710</xloc>
+      
+      
+      <yloc>385</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>07 Validar VDEM anual</name>
+      
+      
+      <description/>
+      
+      
+      <type>SQL</type>
+      
+      
+      <sql>DO $tabd$
+DECLARE n int;
+BEGIN
+  SELECT COUNT(*) INTO n FROM staging.stg_vdem_anual;
+  IF n &lt;&gt; 28 THEN RAISE EXCEPTION 'V-Dem anual: % linhas (esperado 28)',n; END IF;
+  IF EXISTS (
+    SELECT 1 FROM generate_series(1997,2024) AS y(ano)
+    LEFT JOIN staging.stg_vdem_anual v ON v.year=y.ano WHERE v.year IS NULL
+  ) THEN RAISE EXCEPTION 'V-Dem anual: ano ausente'; END IF;
+  IF EXISTS (
+     SELECT 1 FROM staging.stg_vdem_anual v
+     WHERE v.v2x_clpol IS NULL OR v.v2xeg_eqdr IS NULL OR v.v2xeg_eqprotec IS NULL
+       OR v.v2x_cspart IS NULL OR v.op_real IS NULL OR v.des_real IS NULL
+       OR v.dis_real IS NULL OR v.part_civil_real IS NULL
+       OR v.op_real &lt;&gt; 1-v.v2x_clpol OR v.des_real &lt;&gt; 1-v.v2xeg_eqdr
+       OR v.dis_real &lt;&gt; 1-v.v2xeg_eqprotec OR v.part_civil_real&lt;&gt;v.v2x_cspart
+       OR v.qtd_paises_v2x_clpol &lt;= 0 OR v.qtd_paises_v2xeg_eqdr &lt;= 0
+       OR v.qtd_paises_v2xeg_eqprotec &lt;= 0 OR v.qtd_paises_v2x_cspart &lt;= 0
+  ) THEN RAISE EXCEPTION 'V-Dem anual: indicador ou contagem invalida'; END IF;
+  RAISE NOTICE 'OK STAGING ANUAL: 28 anos e 13 campos validos.';
+END
+$tabd$;</sql>
+      
+      
+      <useVariableSubstitution>F</useVariableSubstitution>
+      
+      
+      <sqlfromfile>F</sqlfromfile>
+      
+      
+      <sqlfilename/>
+      
+      
+      <sendOneStatement>T</sendOneStatement>
+      
+      
+      <connection>POSTGRES_TABD</connection>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>480</xloc>
+      
+      
+      <yloc>385</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>08 VDEM_ARCO</name>
+      
+      
+      <description/>
+      
+      
+      <type>TRANS</type>
+      
+      
+      <specification_method>filename</specification_method>
+      
+      
+      <trans_object_id/>
+      
+      
+      <filename>${Internal.Job.Filename.Directory}/../transformations/tr_vdem_arco.ktr</filename>
+      
+      
+      <transname/>
+      
+      
+      <directory>/</directory>
+      
+      
+      <arg_from_previous>N</arg_from_previous>
+      
+      
+      <params_from_previous>N</params_from_previous>
+      
+      
+      <exec_per_row>N</exec_per_row>
+      
+      
+      <clear_rows>N</clear_rows>
+      
+      
+      <clear_files>N</clear_files>
+      
+      
+      <set_logfile>N</set_logfile>
+      
+      
+      <logfile/>
+      
+      
+      <logext/>
+      
+      
+      <add_date>N</add_date>
+      
+      
+      <add_time>N</add_time>
+      
+      
+      <loglevel>Basic</loglevel>
+      
+      
+      <cluster>N</cluster>
+      
+      
+      <slave_server_name/>
+      
+      
+      <set_append_logfile>N</set_append_logfile>
+      
+      
+      <wait_until_finished>Y</wait_until_finished>
+      
+      
+      <follow_abort_remote>N</follow_abort_remote>
+      
+      
+      <create_parent_folder>N</create_parent_folder>
+      
+      
+      <logging_remote_work>N</logging_remote_work>
+      
+      
+      <parameters>
+        
+        
+        <pass_all_parameters>Y</pass_all_parameters>
+        
+      
+      </parameters>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>250</xloc>
+      
+      
+      <yloc>385</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>09 Validar VDEM por arco</name>
+      
+      
+      <description/>
+      
+      
+      <type>SQL</type>
+      
+      
+      <sql>DO $tabd$
+DECLARE
+  total_origem INTEGER;
+  total_anos INTEGER;
+  total_ligacoes INTEGER;
+  total_destino INTEGER;
+  falhas INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO total_origem FROM oltp.arco;
+  SELECT COUNT(*) INTO total_anos FROM staging.stg_vdem_anual;
+  SELECT COUNT(*) INTO total_destino FROM staging.stg_vdem_arco;
+
+  IF total_origem &lt;&gt; 32 OR total_anos &lt;&gt; 28 OR total_destino &lt;&gt; 32 THEN
+    RAISE EXCEPTION 'Quantidades incorretas: origem=%, anual=%, arco=% (esperado 32,28,32)',
+      total_origem, total_anos, total_destino;
+  END IF;
+
+  -- Nao podemos aceitar lacunas anuais: 1 registro por ano de publicacao, inclusive.
+  SELECT COUNT(*) INTO falhas
+  FROM oltp.arco a
+  CROSS JOIN LATERAL generate_series(a.ano_inicio::int,a.ano_fim::int) AS ano_ref(ano_esperado)
+  LEFT JOIN staging.stg_vdem_anual v ON v.year = ano_ref.ano_esperado
+  WHERE v.year IS NULL;
+  IF falhas &gt; 0 THEN
+    RAISE EXCEPTION 'Existem % combinacoes arco-ano sem indicador anual', falhas;
+  END IF;
+
+  -- NULL representa observacao ausente, nao zero. O recorte atual deve ser completo.
+  SELECT COUNT(*) INTO falhas FROM staging.stg_vdem_anual
+  WHERE op_real IS NULL OR des_real IS NULL OR dis_real IS NULL OR part_civil_real IS NULL;
+  IF falhas &gt; 0 THEN
+    RAISE EXCEPTION 'A staging anual tem % linhas com indicadores NULL',falhas;
+  END IF;
+
+  SELECT COUNT(*) INTO total_ligacoes
+  FROM oltp.arco a
+  JOIN staging.stg_vdem_anual v ON v.year BETWEEN a.ano_inicio AND a.ano_fim;
+  IF total_ligacoes &lt;&gt; 58 THEN
+    RAISE EXCEPTION 'Combinacoes arco-ano=% (esperado 58)', total_ligacoes;
+  END IF;
+
+  -- Todos os arcos devem ter exatamente uma linha correspondente no staging.
+  SELECT COUNT(*) INTO falhas
+  FROM oltp.arco a LEFT JOIN staging.stg_vdem_arco s ON s.id_arco_origem=a.id_arco
+  WHERE s.id_arco_origem IS NULL;
+  IF falhas &gt; 0 THEN
+    RAISE EXCEPTION 'Existem % arcos sem indicador na staging por arco',falhas;
+  END IF;
+
+  -- Recalcula independentemente as medias por arco no PostgreSQL.
+  WITH esperado AS (
+    SELECT a.id_arco AS id_arco_origem,
+      ROUND(AVG(v.op_real),6) AS op_real,
+      ROUND(AVG(v.des_real),6) AS des_real,
+      ROUND(AVG(v.dis_real),6) AS dis_real,
+      ROUND(AVG(v.part_civil_real),6) AS part_civil_real
+    FROM oltp.arco a
+    JOIN staging.stg_vdem_anual v ON v.year BETWEEN a.ano_inicio AND a.ano_fim
+    GROUP BY a.id_arco
+  )
+  SELECT COUNT(*) INTO falhas
+  FROM esperado e
+  JOIN staging.stg_vdem_arco s USING (id_arco_origem)
+  WHERE e.op_real IS DISTINCT FROM s.op_real
+     OR e.des_real IS DISTINCT FROM s.des_real
+     OR e.dis_real IS DISTINCT FROM s.dis_real
+     OR e.part_civil_real IS DISTINCT FROM s.part_civil_real;
+  IF falhas &gt; 0 THEN
+    RAISE EXCEPTION 'Foram encontrados % arcos cujas medias divergem do recálculo', falhas;
+  END IF;
+
+  RAISE NOTICE 'OK: % arcos, % combinacoes arco-ano e 4 indicadores conferidos (6 casas).',
+      total_destino,total_ligacoes;
+END
+$tabd$;</sql>
+      
+      
+      <useVariableSubstitution>F</useVariableSubstitution>
+      
+      
+      <sqlfromfile>F</sqlfromfile>
+      
+      
+      <sqlfilename/>
+      
+      
+      <sendOneStatement>T</sendOneStatement>
+      
+      
+      <connection>POSTGRES_TABD</connection>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>250</xloc>
+      
+      
+      <yloc>615</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>10 Validar entrada da FATO</name>
+      
+      
+      <description/>
+      
+      
+      <type>SQL</type>
+      
+      
+      <sql>DO $tabd$
+DECLARE
+    n_arcos INTEGER;
+    n_sagas INTEGER;
+    n_anos INTEGER;
+    n_dim_arcos INTEGER;
+    n_stage INTEGER;
+    n_ligacoes INTEGER;
+    n_incompletos INTEGER;
+BEGIN
+    SELECT count(*) INTO n_arcos FROM oltp.arco;
+    SELECT count(*) INTO n_sagas FROM dw.dim_saga;
+    SELECT count(*) INTO n_anos FROM dw.dim_tempo;
+    SELECT count(*) INTO n_dim_arcos FROM dw.dim_arco;
+    SELECT count(*) INTO n_stage FROM staging.stg_vdem_arco;
+
+    IF n_arcos &lt;&gt; 32 OR n_sagas &lt;&gt; 11 OR n_anos &lt;&gt; 28
+       OR n_dim_arcos &lt;&gt; 32 OR n_stage &lt;&gt; 32 THEN
+        RAISE EXCEPTION 'Fontes incompletas: OLTP arcos=%, DIM_SAGA=%, DIM_TEMPO=%, DIM_ARCO=%, STG_VDEM_ARCO=% (esperados 32,11,28,32,32)',
+            n_arcos,n_sagas,n_anos,n_dim_arcos,n_stage;
+    END IF;
+
+    -- LEFT JOIN verifica cada referencia sem esconder registros ausentes.
+    WITH ligacoes AS (
+      SELECT a.id_arco, a.id_saga, a.ano_inicio, a.ano_fim,
+             da.sk_arco, ds.sk_saga, ti.sk_tempo AS sk_tempo_inicio,
+             tf.sk_tempo AS sk_tempo_fim, v.id_arco_origem,
+             v.op_real, v.des_real, v.dis_real, v.part_civil_real,
+             da.nome_arco AS nome_dim_arco, ds.nome_saga AS nome_dim_saga,
+             a.nome_arco AS nome_oltp_arco, s.nome_saga AS nome_oltp_saga
+      FROM oltp.arco a
+      JOIN oltp.saga s ON s.id_saga = a.id_saga
+      LEFT JOIN dw.dim_arco da ON da.id_arco_origem = a.id_arco
+      LEFT JOIN dw.dim_saga ds ON ds.id_saga_origem = a.id_saga
+      LEFT JOIN dw.dim_tempo ti ON ti.ano = a.ano_inicio
+      LEFT JOIN dw.dim_tempo tf ON tf.ano = a.ano_fim
+      LEFT JOIN staging.stg_vdem_arco v ON v.id_arco_origem = a.id_arco
+    )
+    SELECT count(*),
+      count(*) FILTER (
+         WHERE sk_arco IS NULL OR sk_saga IS NULL
+            OR sk_tempo_inicio IS NULL OR sk_tempo_fim IS NULL
+            OR id_arco_origem IS NULL OR op_real IS NULL
+            OR des_real IS NULL OR dis_real IS NULL OR part_civil_real IS NULL
+            OR nome_dim_arco IS DISTINCT FROM nome_oltp_arco
+            OR nome_dim_saga IS DISTINCT FROM nome_oltp_saga
+      )
+    INTO n_ligacoes,n_incompletos FROM ligacoes;
+
+    IF n_ligacoes &lt;&gt; 32 OR n_incompletos &lt;&gt; 0 THEN
+        RAISE EXCEPTION 'Integracao incompleta: ligacoes=% (esperado 32), linhas invalidas=% (esperado 0)',
+             n_ligacoes,n_incompletos;
+    END IF;
+    RAISE NOTICE 'OK: fontes prontas; 32 arcos com dimensoes e indicadores V-Dem completos.';
+END
+$tabd$;</sql>
+      
+      
+      <useVariableSubstitution>F</useVariableSubstitution>
+      
+      
+      <sqlfromfile>F</sqlfromfile>
+      
+      
+      <sqlfilename/>
+      
+      
+      <sendOneStatement>T</sendOneStatement>
+      
+      
+      <connection>POSTGRES_TABD</connection>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>480</xloc>
+      
+      
+      <yloc>615</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>11 FATO_SOCIOPOLITICA</name>
+      
+      
+      <description/>
+      
+      
+      <type>TRANS</type>
+      
+      
+      <specification_method>filename</specification_method>
+      
+      
+      <trans_object_id/>
+      
+      
+      <filename>${Internal.Job.Filename.Directory}/../transformations/tr_fato_sociopolitica.ktr</filename>
+      
+      
+      <transname/>
+      
+      
+      <directory>/</directory>
+      
+      
+      <arg_from_previous>N</arg_from_previous>
+      
+      
+      <params_from_previous>N</params_from_previous>
+      
+      
+      <exec_per_row>N</exec_per_row>
+      
+      
+      <clear_rows>N</clear_rows>
+      
+      
+      <clear_files>N</clear_files>
+      
+      
+      <set_logfile>N</set_logfile>
+      
+      
+      <logfile/>
+      
+      
+      <logext/>
+      
+      
+      <add_date>N</add_date>
+      
+      
+      <add_time>N</add_time>
+      
+      
+      <loglevel>Basic</loglevel>
+      
+      
+      <cluster>N</cluster>
+      
+      
+      <slave_server_name/>
+      
+      
+      <set_append_logfile>N</set_append_logfile>
+      
+      
+      <wait_until_finished>Y</wait_until_finished>
+      
+      
+      <follow_abort_remote>N</follow_abort_remote>
+      
+      
+      <create_parent_folder>N</create_parent_folder>
+      
+      
+      <logging_remote_work>N</logging_remote_work>
+      
+      
+      <parameters>
+        
+        
+        <pass_all_parameters>Y</pass_all_parameters>
+        
+      
+      </parameters>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>710</xloc>
+      
+      
+      <yloc>615</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>12 Validar DW final</name>
+      
+      
+      <description/>
+      
+      
+      <type>SQL</type>
+      
+      
+      <sql>DO $tabd$
+DECLARE
+  n_fato INTEGER;
+  n_arcos INTEGER;
+  n_integrados INTEGER;
+  n_divergencias INTEGER;
+  n_soma_capitulos INTEGER;
+BEGIN
+  SELECT count(*) INTO n_fato FROM dw.fato_sociopolitica_arco;
+  SELECT count(*) INTO n_arcos FROM oltp.arco;
+  IF n_fato &lt;&gt; 32 OR n_arcos &lt;&gt; 32 THEN
+    RAISE EXCEPTION 'Quantidade de registros: fato=%, origem=% (esperado 32 em cada)',n_fato,n_arcos;
+  END IF;
+
+  -- Todas as dimensoes e o V-Dem precisam estar mapeados para o mesmo arco.
+  WITH esperado AS (
+    SELECT
+      da.sk_arco, ds.sk_saga,
+      ti.sk_tempo AS sk_tempo_inicio, tf.sk_tempo AS sk_tempo_fim,
+      a.qtd_capitulos,
+      (a.ano_fim - a.ano_inicio + 1)::smallint AS duracao_publicacao_anos,
+      a.op_final,a.des_final,a.dis_final,a.res_final,a.isa_final,
+      v.op_real,v.des_real,v.dis_real,v.part_civil_real,
+      1::smallint AS qtd_arcos
+    FROM oltp.arco a
+    JOIN dw.dim_arco da ON da.id_arco_origem=a.id_arco
+    JOIN dw.dim_saga ds ON ds.id_saga_origem=a.id_saga
+    JOIN dw.dim_tempo ti ON ti.ano=a.ano_inicio
+    JOIN dw.dim_tempo tf ON tf.ano=a.ano_fim
+    JOIN staging.stg_vdem_arco v ON v.id_arco_origem=a.id_arco
+  )
+  SELECT count(*) INTO n_integrados FROM esperado;
+  IF n_integrados &lt;&gt; 32 THEN
+    RAISE EXCEPTION 'A consulta de integracao resulta em % linhas (esperado 32)', n_integrados;
+  END IF;
+
+  WITH esperado AS (
+    SELECT
+      da.sk_arco, ds.sk_saga,
+      ti.sk_tempo AS sk_tempo_inicio, tf.sk_tempo AS sk_tempo_fim,
+      a.qtd_capitulos,
+      (a.ano_fim - a.ano_inicio + 1)::smallint AS duracao_publicacao_anos,
+      a.op_final,a.des_final,a.dis_final,a.res_final,a.isa_final,
+      v.op_real,v.des_real,v.dis_real,v.part_civil_real,
+      1::smallint AS qtd_arcos
+    FROM oltp.arco a
+    JOIN dw.dim_arco da ON da.id_arco_origem=a.id_arco
+    JOIN dw.dim_saga ds ON ds.id_saga_origem=a.id_saga
+    JOIN dw.dim_tempo ti ON ti.ano=a.ano_inicio
+    JOIN dw.dim_tempo tf ON tf.ano=a.ano_fim
+    JOIN staging.stg_vdem_arco v ON v.id_arco_origem=a.id_arco
+  )
+  SELECT count(*) INTO n_divergencias
+  FROM esperado e
+  FULL JOIN dw.fato_sociopolitica_arco f ON f.sk_arco=e.sk_arco
+  WHERE e.sk_arco IS NULL OR f.sk_arco IS NULL
+     OR f.sk_saga IS DISTINCT FROM e.sk_saga
+     OR f.sk_tempo_inicio IS DISTINCT FROM e.sk_tempo_inicio
+     OR f.sk_tempo_fim IS DISTINCT FROM e.sk_tempo_fim
+     OR f.qtd_capitulos IS DISTINCT FROM e.qtd_capitulos
+     OR f.duracao_publicacao_anos IS DISTINCT FROM e.duracao_publicacao_anos
+     OR f.op_final IS DISTINCT FROM e.op_final
+     OR f.des_final IS DISTINCT FROM e.des_final
+     OR f.dis_final IS DISTINCT FROM e.dis_final
+     OR f.res_final IS DISTINCT FROM e.res_final
+     OR f.isa_final IS DISTINCT FROM e.isa_final
+     OR f.op_real IS DISTINCT FROM e.op_real
+     OR f.des_real IS DISTINCT FROM e.des_real
+     OR f.dis_real IS DISTINCT FROM e.dis_real
+     OR f.part_civil_real IS DISTINCT FROM e.part_civil_real
+     OR f.qtd_arcos IS DISTINCT FROM e.qtd_arcos;
+  IF n_divergencias &lt;&gt; 0 THEN
+    RAISE EXCEPTION 'Fato possui % linhas ausentes, extras ou com valores divergentes',n_divergencias;
+  END IF;
+
+  IF EXISTS (
+       SELECT sk_arco FROM dw.fato_sociopolitica_arco GROUP BY sk_arco HAVING count(*) &gt; 1
+  ) THEN
+       RAISE EXCEPTION 'Duplicidade de sk_arco na tabela fato';
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM dw.fato_sociopolitica_arco
+       WHERE op_real IS NULL OR des_real IS NULL
+          OR dis_real IS NULL OR part_civil_real IS NULL
+          OR qtd_arcos &lt;&gt; 1
+          OR isa_final &lt;&gt; op_final + des_final + dis_final + res_final
+  ) THEN
+       RAISE EXCEPTION 'Fato contem indicadores ausentes ou medidas inconsistentes';
+  END IF;
+  SELECT sum(qtd_capitulos) INTO n_soma_capitulos FROM dw.fato_sociopolitica_arco;
+  IF n_soma_capitulos &lt;&gt; 1125 THEN
+     RAISE EXCEPTION 'Soma de capitulos=% (esperado 1125)',n_soma_capitulos;
+  END IF;
+  RAISE NOTICE 'OK: 32 linhas na FATO; 16 campos integrados conferidos, 1125 capitulos, sem duplicidades nem divergencias.';
+END
+$tabd$;</sql>
+      
+      
+      <useVariableSubstitution>F</useVariableSubstitution>
+      
+      
+      <sqlfromfile>F</sqlfromfile>
+      
+      
+      <sqlfilename/>
+      
+      
+      <sendOneStatement>T</sendOneStatement>
+      
+      
+      <connection>POSTGRES_TABD</connection>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>940</xloc>
+      
+      
+      <yloc>615</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>SUCCESS</name>
+      
+      
+      <description>Todas as transformacoes e validacoes executadas sem erros.</description>
+      
+      
+      <type>SUCCESS</type>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>1200</xloc>
+      
+      
+      <yloc>645</yloc>
+      
+    
+    </entry>
+    
+    
+    <entry>
+      
+      
+      <name>ABORT - falha no ETL</name>
+      
+      
+      <description>Interrompe ao primeiro erro e retorna status de falha.</description>
+      
+      
+      <type>ABORT</type>
+      
+      
+      <message>ETL TABD interrompido: consulte o log da entrada anterior para identificar a falha. Nao execute o reset antes de investigar.</message>
+      
+      
+      <parallel>N</parallel>
+      
+      
+      <draw>Y</draw>
+      
+      
+      <nr>0</nr>
+      
+      
+      <xloc>1270</xloc>
+      
+      
+      <yloc>270</yloc>
+      
+    
+    </entry>
+    
+  
+  </entries>
+  
+  
+  <hops>
+    
+    
+    <hop>
+      <from>00 Carregar .env</from>
+      <to>01 Validar OLTP</to>
+      <from_nr>0</from_nr>
+      <to_nr>0</to_nr>
+      <enabled>Y</enabled>
+      <evaluation>Y</evaluation>
+      <unconditional>N</unconditional>
+    </hop>
+    <hop>
+      <from>00 Carregar .env</from>
+      <to>ABORT - falha no ETL</to>
+      <from_nr>0</from_nr>
+      <to_nr>0</to_nr>
+      <enabled>Y</enabled>
+      <evaluation>N</evaluation>
+      <unconditional>N</unconditional>
+    </hop>
+    <hop>
+      
+      
+      <from>START</from>
+      
+      
+      <to>00 Carregar .env</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>Y</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>01 Validar OLTP</from>
+      
+      
+      <to>02 DIM_TEMPO</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>01 Validar OLTP</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>02 DIM_TEMPO</from>
+      
+      
+      <to>03 DIM_SAGA</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>02 DIM_TEMPO</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>03 DIM_SAGA</from>
+      
+      
+      <to>04 DIM_ARCO</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>03 DIM_SAGA</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>04 DIM_ARCO</from>
+      
+      
+      <to>05 Validar dimensoes</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>04 DIM_ARCO</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>05 Validar dimensoes</from>
+      
+      
+      <to>06 VDEM_ANUAL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>05 Validar dimensoes</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>06 VDEM_ANUAL</from>
+      
+      
+      <to>07 Validar VDEM anual</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>06 VDEM_ANUAL</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>07 Validar VDEM anual</from>
+      
+      
+      <to>08 VDEM_ARCO</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>07 Validar VDEM anual</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>08 VDEM_ARCO</from>
+      
+      
+      <to>09 Validar VDEM por arco</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>08 VDEM_ARCO</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>09 Validar VDEM por arco</from>
+      
+      
+      <to>10 Validar entrada da FATO</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>09 Validar VDEM por arco</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>10 Validar entrada da FATO</from>
+      
+      
+      <to>11 FATO_SOCIOPOLITICA</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>10 Validar entrada da FATO</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>11 FATO_SOCIOPOLITICA</from>
+      
+      
+      <to>12 Validar DW final</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>11 FATO_SOCIOPOLITICA</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>12 Validar DW final</from>
+      
+      
+      <to>SUCCESS</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>Y</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+    
+    <hop>
+      
+      
+      <from>12 Validar DW final</from>
+      
+      
+      <to>ABORT - falha no ETL</to>
+      
+      
+      <from_nr>0</from_nr>
+      
+      
+      <to_nr>0</to_nr>
+      
+      
+      <enabled>Y</enabled>
+      
+      
+      <evaluation>N</evaluation>
+      
+      
+      <unconditional>N</unconditional>
+      
+    
+    </hop>
+    
+  
+  </hops>
+  
+  
+  <notepads/>
+  
+  
+  <slaveservers/>
+  
+
+</job>
